@@ -92,8 +92,8 @@ function generateSheet(sourceLS, sourceDoc, baseLocation, baseName, posFile)
     var defWidth = sourceLS.bounds[2] - sourceLS.bounds[0]; 
     var defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
 
-    //this loop moves each layer (in reverse order)
- 	for (var i=(destDoc.artLayers.length - 1); i >= 0; i--) 
+    //this loop moves each layer 
+ 	for (var i=0; i <destDoc.artLayers.length; i++) 
     {
         xpos = moveLayerAndLog(destDoc.artLayers[i], xpos, posFile, destDoc, useVariableSpaces, defWidth, defHeight);
     }
