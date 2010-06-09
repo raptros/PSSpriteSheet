@@ -69,21 +69,16 @@ function prepareDestDoc(sourceLS, sourceDoc, useVariableSpaces, name)
     return destDoc;
 }
 
-// saves doc as PSD in file
-function saveDoc(doc, file)
-{
-    var saveOpt = new PhotoshopSaveOptions();
-    doc.saveAs(file, saveOpt, false, Extension.LOWERCASE);
-}
+
 
 //generates a sprite sheet for a layer set - creates a new document, 
 //names it based on the original document, logs the position information
-//and stores the new document in the appropriate place.
+//and returns the generated sheet.
 function generateSheet(sourceLS, sourceDoc, baseLocation, baseName, posFile)
 {
     var useVariableSpaces = Window.confirm("Do you want to let layers have variable spacing for the " + sourceLS.name + " sheet?",
             true, "Variable spacing?");
-    var destDoc = prepareDestDoc(sourceLS, sourceDoc, useVariableSpaces, baseName + "-" + sourceLS.name + ".psd");
+    var destDoc = prepareDestDoc(sourceLS, sourceDoc, useVariableSpaces, baseName + "-" + sourceLS.name);
     posFile.writeln(destDoc.name);
 
     var xpos = new UnitValue(0, "px"); //have to make this a unit value for initial subtraction to work.
@@ -97,14 +92,52 @@ function generateSheet(sourceLS, sourceDoc, baseLocation, baseName, posFile)
     {
         xpos = moveLayerAndLog(destDoc.artLayers[i], xpos, posFile, destDoc, useVariableSpaces, defWidth, defHeight);
     }
-    var destFile = new File(baseLocation + "/" + destDoc.name);
-    saveDoc(destDoc, destFile);
+    return destDoc;
 }
 
 
 //TODO: 
 //generate xml output
-//file type choosing
+
+//Brings up a dialog asking about how export should be done.
+function getPNGOpts()
+{
+    var dia = new Window(
+            "dialog { \
+                info : Panel { orientation: 'column', alignChildren: 'right', \
+                    text: 'Options', \
+                    formatType: Group { orientation: 'row', \
+                        formatCheck: Checkbox { text: 'Use PNG24 instead of PNG?' }\
+                    }\
+                }, \
+                buttons: Group { orientation: 'row', \
+                    okBtn: Button { text:'OK', properties:{name:'ok'}},  \
+                    cancelBtn: Button { text:'Cancel', properties:{name:'cancel'}} \
+                } \
+             }" );
+    dia.center();
+    result = dia.show();
+    if (result == 1)
+    {
+        var exportOpts = new ExportOptionsSaveForWeb();
+        exportOpts.format = SaveDocumentType.PNG;
+        exportOpts.PNG8 = !dia.info.formatType.formatCheck.value;
+        return exportOpts;
+    }
+    else
+        return null;
+}
+
+// saves doc as PSD in file, and exports pngs
+function saveAndExportSheet(doc, baseLocation, exportOpts)
+{
+    var exportFile = new File(baseLocation + "/" + doc.name + ".png");
+    doc.exportDocument(exportFile, ExportType.SAVEFORWEB, exportOpts);
+
+    var destFile = new File(baseLocation + "/" + doc.name + ".psd");
+    var saveOpt = new PhotoshopSaveOptions();
+    doc.saveAs(destFile, saveOpt, false, Extension.LOWERCASE);
+}
 
 //New version! this one generates a spritesheet for each layer set (folder) of the document.
 //It asks for the location to store the generated spritesheets, and has a single log
@@ -113,6 +146,11 @@ function main()
 {
 	app.preferences.rulerUnits = Units.PIXELS;
     var sourceDoc = activeDocument;
+
+    //get options for exporting each generated sheet to PNG
+    opts = getPNGOpts();
+    if (opts == null)
+        return ;
 
     //find out where to store everything.
     var base= sourceDoc.path.selectDlg();
@@ -125,11 +163,14 @@ function main()
     var posFile = new File(baseLocation + "/" + baseName + "-positions.txt", "TEXT");
     posFile.open("w");
 
+    var sheet;
+
     //loop over each folder, generating sheets.
     var count = sourceDoc.layerSets.length;
  	for (var i=0; i < count; i++) 
     {
-        generateSheet(sourceDoc.layerSets[i], sourceDoc, baseLocation, baseName, posFile);
+        sheet = generateSheet(sourceDoc.layerSets[i], sourceDoc, baseLocation, baseName, posFile);
+        saveAndExportSheet(sheet, baseLocation, opts);
     }
 
     posFile.close();
