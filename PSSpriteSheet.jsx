@@ -18,7 +18,7 @@ function sheetString(sheet)
                     + " " + prop("src", sheet.longName + sheet.esuffix)
                     + " " + prop("w", sheet.doc.width.value)
                     + " " + prop("h", sheet.doc.height.value)
-                    + " />";
+                    + ">";
 
 }
 
