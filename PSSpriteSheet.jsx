@@ -94,7 +94,7 @@ function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
     }
 
     //lays out the layers of the spritesheet, logs information
-    this.layout = function()
+    this.layout = function(indent)
     {
         var xpos = new UnitValue(0, "px"); //have to make this a unit value for initial subtraction to work.
         var sourceLS = this.sourceLS;
@@ -103,17 +103,18 @@ function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
         this.defWidth = sourceLS.bounds[2] - sourceLS.bounds[0]; 
         this.defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
 
-        this.posFile.writeln(sheetString(this));
+        this.posFile.writeln(indent + sheetString(this));
+        var indent2 = indent+indent;
         //this loop moves each layer 
         for (var i=0; i < this.doc.artLayers.length; i++) 
         {
-            xpos = this.moveLayer(this.doc.artLayers[i], xpos);
+            xpos = this.moveLayer(this.doc.artLayers[i], xpos, indent2);
         }
-        this.posFile.writeln(closeSheet());
+        this.posFile.writeln(indent + closeSheet());
     }
 
     //places the next layer in the new PSD, writes the position and dimensions to the file
-    this.moveLayer = function(layer, newX)
+    this.moveLayer = function(layer, newX, indent)
     {
         //place object all the way to the top left of the available space
         //remember that translate is relative to the current position of the layer.
@@ -137,7 +138,7 @@ function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
             height = this.defHeight;
         }
 
-        this.posFile.writeln("    " +
+        this.posFile.writeln(indent +
                 spriteString(x.value, y.value, width.value, height.value, layer.name));
 
         //update the x position.
@@ -240,7 +241,10 @@ function main()
     posFile.open("w");
     posFile.writeln("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>");
 
+    posFile.writeln("<positions " + prop("name", baseName) + " >");
+
     var sheet;
+    var indent = "    ";
 
     //loop over each folder, generating sheets.
     var count = sourceDoc.layerSets.length;
@@ -248,10 +252,11 @@ function main()
     {
         sheet = new Sheet(posFile, baseLocation, baseName, opts, sourceDoc.layerSets[i]);
         sheet.createDoc(sourceDoc);
-        sheet.layout();
+        sheet.layout(indent);
         sheet.saveAndExport();
     }
-
+    
+    posFile.writeln("</positions>");
     posFile.close();
 
 }
