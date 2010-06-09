@@ -1,107 +1,155 @@
-//places the next layer in the new PSD, writes the position and dimensions to the file
-function moveLayerAndLog(layer, newX, posFile, destDoc, useVariableSpaces, defWidth, defHeight)
+function prop(name, value) { return name + "=\"" + value + "\""; }
+
+//generate a sprite node.
+function spriteString(x, y, w, h, name)
 {
-    //place object all the way to the top left of the available space
-    //remember that translate is relative to the current position of the layer.
-    var negativeY = new UnitValue(-layer.bounds[1], "px");
-    layer.translate(newX - layer.bounds[0], negativeY);
-    
-    //obtain the current dimensions and position of the layer.
-    var x = layer.bounds[0];
-    var width = layer.bounds[2] - x;
-    var y = layer.bounds[1]
-    var height = layer.bounds[3] - y;
+    return "<sprite" + " " + prop("name", name)
+                    + " " + prop("x", x)
+                    + " " + prop("y", y)
+                    + " " + prop("w", w)
+                    + " " + prop("h", h)
+                    + " />";
 
-    //If spacing is variable, then sprite is located properly.
-    //Otherwise, center the sprite, and use the default sizes.
-    if (!useVariableSpaces)
-    {
-        var xoffset = (defWidth - width) * 0.5;
-        var yoffset = (defHeight - height) * 0.5;
-        layer.translate(xoffset, yoffset);
-        width = defWidth;
-        height = defHeight;
-    }
-
-    //Then, log the current x, y, width, height. this will become some kind of XML info.
-    var coords = "(" + x.value + ", " + y.value + ")";
-    var size = "[" + width.value + "x" + height.value + "]";
-    var bounds = "{" + layer.bounds[0].value + ", " + layer.bounds[1].value +
-        ", " + layer.bounds[2].value + ", " + layer.bounds[3].value + "}";
-    posFile.writeln(coords + " " + size + " " + bounds);
-
-    //update the x position.
-    return newX + width;
 }
 
-//This function generates a new document,
-//copies each layer from the source layer set into the new document,
-//and figures out the width of the new document
-function prepareDestDoc(sourceLS, sourceDoc, useVariableSpaces, name)
+function sheetString(sheet)
 {
-    //create a new document that the layers can be copied to.
-    var width = sourceLS.bounds[2] - sourceLS.bounds[0];
-    var height = sourceLS.bounds[3] - sourceLS.bounds[1];
-    
-    var destDoc = documents.add(width, height, sourceDoc.resolution, name, NewDocumentMode.RGB, DocumentFill.TRANSPARENT);
-  
-    var newWidth = 0;
-    //for every visible layer in the layer set,
-    //copy the layer over to the new document,
-    //and (if in variable space mode) sum up the widths.
-    for (var i=0; i < sourceLS.artLayers.length; i++)
-    {
-        var layer = sourceLS.artLayers[i];
-        if (layer.visible)
-        {
-            //the requirement that the active doc be switched is irritating, I know.
-            activeDocument = sourceDoc;
-            layer.copy();
-            activeDocument = destDoc;
-            destDoc.paste();
-            if (useVariableSpaces)
-                newWidth += (layer.bounds[2] - layer.bounds[0]);
-        }
-    }
-    if (!useVariableSpaces)
-        newWidth = sourceLS.artLayers.length * width;
-    destDoc.resizeCanvas(newWidth, destDoc.height, AnchorPosition.TOPLEFT);
-    return destDoc;
+    return "<sheet" + " " + prop("name", sheet.name)
+                    + " " + prop("src", sheet.longName + sheet.esuffix)
+                    + " " + prop("w", sheet.doc.width.value)
+                    + " " + prop("h", sheet.doc.height.value)
+                    + " />";
+
 }
 
+function closeSheet() { return "</sheet>";}
 
-
-//generates a sprite sheet for a layer set - creates a new document, 
-//names it based on the original document, logs the position information
-//and returns the generated sheet.
-function generateSheet(sourceLS, sourceDoc, baseLocation, baseName, posFile)
+//This represents a sheet object - it has some locations and naming stuff, export options, and source layers
+//cycle: createDoc, layout, saveAndExport
+function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
 {
-    var useVariableSpaces = Window.confirm("Do you want to let layers have variable spacing for the " + sourceLS.name + " sheet?",
+    this.posFile = posFile;
+    this.baseLoc = baseLocation;
+    this.baseName = baseName;
+    this.opts = opts;
+    this.doc = null;
+    this.sourceLS = sourceLS;
+    this.name = sourceLS.name;
+    this.longName = this.baseName + "-" + this.name
+
+    this.esuffix = ".png";
+    if (this.opts.format == SaveDocumentType.JPEG)
+        this.esuffix = ".jpg";
+    else if (this.opts.format == SaveDocumentType.COMPUSERVEGIF)
+        this.esuffix = ".gif";
+
+    this.useVariableSpaces = Window.confirm("Do you want to let layers have variable spacing for the " + this.name + " sheet?",
             true, "Variable spacing?");
-    var destDoc = prepareDestDoc(sourceLS, sourceDoc, useVariableSpaces, baseName + "-" + sourceLS.name);
-    posFile.writeln(destDoc.name);
 
-    var xpos = new UnitValue(0, "px"); //have to make this a unit value for initial subtraction to work.
-
-    //used for non-variable spacing mode:
-    var defWidth = sourceLS.bounds[2] - sourceLS.bounds[0]; 
-    var defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
-
-    //this loop moves each layer 
- 	for (var i=0; i <destDoc.artLayers.length; i++) 
+    // saves doc as PSD in file, and exports images of aprropriate type
+    this.saveAndExport = function()
     {
-        xpos = moveLayerAndLog(destDoc.artLayers[i], xpos, posFile, destDoc, useVariableSpaces, defWidth, defHeight);
+        var exportFile = new File(this.baseLoc+ "/" + this.longName + this.esuffix);
+        this.doc.exportDocument(exportFile, ExportType.SAVEFORWEB, this.opts);
+
+        var destFile = new File(this.baseLoc+ "/" + this.longName + ".psd");
+        var saveOpt = new PhotoshopSaveOptions();
+        this.doc.saveAs(destFile, saveOpt, false, Extension.LOWERCASE);
     }
-    return destDoc;
+
+    //This function generates a new document,
+    //copies each layer from the source layer set into the new document,
+    //and figures out the width of the new document
+    this.createDoc = function(sourceDoc)
+    {
+        var sourceLS = this.sourceLS;
+        //create a new document that the layers can be copied to.
+        var width = sourceLS.bounds[2] - sourceLS.bounds[0];
+        var height = sourceLS.bounds[3] - sourceLS.bounds[1];
+        
+        this.doc = documents.add(width, height, sourceDoc.resolution, this.longName,
+                                NewDocumentMode.RGB, DocumentFill.TRANSPARENT);
+      
+        var newWidth = 0;
+        //for every visible layer in the layer set, copy the layer over to the new document,
+        //and (if in variable space mode) sum up the widths.
+        for (var i=0; i < sourceLS.artLayers.length; i++)
+        {
+            var layer = sourceLS.artLayers[i];
+            if (layer.visible)
+            {
+                //the requirement that the active doc be switched is irritating, I know.
+                activeDocument = sourceDoc;
+                layer.copy();
+                activeDocument = this.doc;
+                //we want to keep the original layer names. Yes, this does exactly that.
+                this.doc.paste().name = layer.name;
+                if (this.useVariableSpaces)
+                    newWidth += (layer.bounds[2] - layer.bounds[0]);
+            }
+        }
+        if (!this.useVariableSpaces)
+            newWidth = sourceLS.artLayers.length * width;
+        this.doc.resizeCanvas(newWidth, this.doc.height, AnchorPosition.TOPLEFT);
+    }
+
+    //lays out the layers of the spritesheet, logs information
+    this.layout = function()
+    {
+        var xpos = new UnitValue(0, "px"); //have to make this a unit value for initial subtraction to work.
+        var sourceLS = this.sourceLS;
+
+        //used for non-variable spacing mode:
+        this.defWidth = sourceLS.bounds[2] - sourceLS.bounds[0]; 
+        this.defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
+
+        this.posFile.writeln(sheetString(this));
+        //this loop moves each layer 
+        for (var i=0; i < this.doc.artLayers.length; i++) 
+        {
+            xpos = this.moveLayer(this.doc.artLayers[i], xpos);
+        }
+        this.posFile.writeln(closeSheet());
+    }
+
+    //places the next layer in the new PSD, writes the position and dimensions to the file
+    this.moveLayer = function(layer, newX)
+    {
+        //place object all the way to the top left of the available space
+        //remember that translate is relative to the current position of the layer.
+        var negativeY = new UnitValue(-layer.bounds[1], "px");
+        layer.translate(newX - layer.bounds[0], negativeY);
+        
+        //obtain the current dimensions and position of the layer.
+        var x = layer.bounds[0];
+        var width = layer.bounds[2] - x;
+        var y = layer.bounds[1];
+        var height = layer.bounds[3] - y;
+
+        //If spacing is variable, then sprite is located properly.
+        //Otherwise, center the sprite, and use the default sizes.
+        if (!this.useVariableSpaces)
+        {
+            var xoffset = (this.defWidth - width) * 0.5;
+            var yoffset = (this.defHeight - height) * 0.5;
+            layer.translate(xoffset, yoffset);
+            width = this.defWidth;
+            height = this.defHeight;
+        }
+
+        this.posFile.writeln("    " +
+                spriteString(x.value, y.value, width.value, height.value, layer.name));
+
+        //update the x position.
+        return newX + width;
+    }
+
 }
-
-
-//TODO: 
-//generate xml output
 
 //Brings up a dialog asking about how export should be done.
 function getFormatOpts()
 {
+    //The dialog is built using a resource string.
     var dia = new Window(
             "dialog { \
                 info : Panel { orientation: 'column', alignChildren: 'right', \
@@ -123,6 +171,7 @@ function getFormatOpts()
                     cancelBtn: Button { text:'Cancel', properties:{name:'cancel'}} \
                 } \
              }" );
+    // this allows only option groups for the chosen format to be shown
     dia.info.format.chooser.onChange = function ()
     {
         if (this.selection != null) 
@@ -132,6 +181,7 @@ function getFormatOpts()
             this.selection.group.visible = true;//show this group
         }
     }
+    //formats that can be exported to, and their options
     var item = dia.info.format.chooser.add("item", "PNG");
     item.group = dia.info.pngOpts;
     item = dia.info.format.chooser.add("item", "JPEG");
@@ -143,6 +193,7 @@ function getFormatOpts()
     result = dia.show();
     if (result == 1)
     {
+        //generate the options object using the results from the dialog.
         var exportOpts = new ExportOptionsSaveForWeb();
         switch (dia.info.format.chooser.selection.index)
         {
@@ -163,21 +214,6 @@ function getFormatOpts()
         return null;
 }
 
-// saves doc as PSD in file, and exports pngs
-function saveAndExportSheet(doc, baseLocation, exportOpts)
-{
-    var esuffix = ".png";
-    if (exportOpts.format == SaveDocumentType.JPEG)
-        esuffix = ".jpg";
-    else if (exportOpts.format == SaveDocumentType.COMPUSERVEGIF)
-        esuffix = ".gif";
-    var exportFile = new File(baseLocation + "/" + doc.name + esuffix);
-    doc.exportDocument(exportFile, ExportType.SAVEFORWEB, exportOpts);
-
-    var destFile = new File(baseLocation + "/" + doc.name + ".psd");
-    var saveOpt = new PhotoshopSaveOptions();
-    doc.saveAs(destFile, saveOpt, false, Extension.LOWERCASE);
-}
 
 //New version! this one generates a spritesheet for each layer set (folder) of the document.
 //It asks for the location to store the generated spritesheets, and has a single log
@@ -200,8 +236,9 @@ function main()
     var baseName = sourceDoc.name.substring(0, sourceDoc.name.lastIndexOf("."));
 
     //text file stores positions of sprites in the sheets.
-    var posFile = new File(baseLocation + "/" + baseName + "-positions.txt", "TEXT");
+    var posFile = new File(baseLocation + "/" + baseName + "-positions.xml", "TEXT");
     posFile.open("w");
+    posFile.writeln("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>");
 
     var sheet;
 
@@ -209,8 +246,10 @@ function main()
     var count = sourceDoc.layerSets.length;
  	for (var i=0; i < count; i++) 
     {
-        sheet = generateSheet(sourceDoc.layerSets[i], sourceDoc, baseLocation, baseName, posFile);
-        saveAndExportSheet(sheet, baseLocation, opts);
+        sheet = new Sheet(posFile, baseLocation, baseName, opts, sourceDoc.layerSets[i]);
+        sheet.createDoc(sourceDoc);
+        sheet.layout();
+        sheet.saveAndExport();
     }
 
     posFile.close();
