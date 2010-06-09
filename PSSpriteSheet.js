@@ -100,14 +100,22 @@ function generateSheet(sourceLS, sourceDoc, baseLocation, baseName, posFile)
 //generate xml output
 
 //Brings up a dialog asking about how export should be done.
-function getPNGOpts()
+function getFormatOpts()
 {
     var dia = new Window(
             "dialog { \
                 info : Panel { orientation: 'column', alignChildren: 'right', \
                     text: 'Options', \
-                    formatType: Group { orientation: 'row', \
-                        formatCheck: Checkbox { text: 'Use PNG24 instead of PNG?' }\
+                    format : Group { orientation: 'row', \
+                        prompter : StaticText { text: 'What format to export in?'}, \
+                        chooser : DropDownList { alignment: 'left' } \
+                    },\
+                    pngOpts: Group { orientation: 'row', \
+                        typeCheck: Checkbox { text: 'Use PNG24 instead of PNG8.' }\
+                    },\
+                    jpgOpts: Group { orientation: 'row' \
+                    },\
+                    gifOpts: Group { orientation: 'row' \
                     }\
                 }, \
                 buttons: Group { orientation: 'row', \
@@ -115,13 +123,40 @@ function getPNGOpts()
                     cancelBtn: Button { text:'Cancel', properties:{name:'cancel'}} \
                 } \
              }" );
+    dia.info.format.chooser.onChange = function ()
+    {
+        if (this.selection != null) 
+        {
+            for (var g = 0; g < this.items.length; g++)
+                this.items[g].group.visible = false; //hide all other groups
+            this.selection.group.visible = true;//show this group
+        }
+    }
+    var item = dia.info.format.chooser.add("item", "PNG");
+    item.group = dia.info.pngOpts;
+    item = dia.info.format.chooser.add("item", "JPEG");
+    item.group = dia.info.jpgOpts;
+    item = dia.info.format.chooser.add("item", "GIF");
+    item.group = dia.info.gifOpts;
+    dia.info.format.chooser.selection = dia.info.format.chooser.items[0];
     dia.center();
     result = dia.show();
     if (result == 1)
     {
         var exportOpts = new ExportOptionsSaveForWeb();
-        exportOpts.format = SaveDocumentType.PNG;
-        exportOpts.PNG8 = !dia.info.formatType.formatCheck.value;
+        switch (dia.info.format.chooser.selection.index)
+        {
+            case 0:
+                exportOpts.format = SaveDocumentType.PNG;
+                exportOpts.PNG8 = !dia.info.pngOpts.typeCheck.value;
+                break;
+            case 1:
+                exportOpts.format = SaveDocumentType.JPEG;
+                break;
+            case 2:
+                exportOpts.format = SaveDocumentType.COMPUSERVEGIF;
+                break;
+        }
         return exportOpts;
     }
     else
@@ -131,7 +166,12 @@ function getPNGOpts()
 // saves doc as PSD in file, and exports pngs
 function saveAndExportSheet(doc, baseLocation, exportOpts)
 {
-    var exportFile = new File(baseLocation + "/" + doc.name + ".png");
+    var esuffix = ".png";
+    if (exportOpts.format == SaveDocumentType.JPEG)
+        esuffix = ".jpg";
+    else if (exportOpts.format == SaveDocumentType.COMPUSERVEGIF)
+        esuffix = ".gif";
+    var exportFile = new File(baseLocation + "/" + doc.name + esuffix);
     doc.exportDocument(exportFile, ExportType.SAVEFORWEB, exportOpts);
 
     var destFile = new File(baseLocation + "/" + doc.name + ".psd");
@@ -148,7 +188,7 @@ function main()
     var sourceDoc = activeDocument;
 
     //get options for exporting each generated sheet to PNG
-    opts = getPNGOpts();
+    opts = getFormatOpts();
     if (opts == null)
         return ;
 
