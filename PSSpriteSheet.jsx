@@ -15,7 +15,7 @@ function spriteString(x, y, w, h, name)
 function sheetString(sheet)
 {
     return "<sheet" + " " + prop("name", sheet.name)
-                    + " " + prop("src", sheet.longName + sheet.esuffix)
+                    + " " + prop("src", sheet.longName + sheet.suffix)
                     + " " + prop("w", sheet.doc.width.value)
                     + " " + prop("h", sheet.doc.height.value)
                     + ">";
@@ -26,35 +26,45 @@ function closeSheet() { return "</sheet>";}
 
 //This represents a sheet object - it has some locations and naming stuff, export options, and source layers
 //cycle: createDoc, layout, saveAndExport
-function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
+function Sheet(sourceLS)
 {
-    this.posFile = posFile;
-    this.baseLoc = baseLocation;
-    this.baseName = baseName;
-    this.opts = opts;
+    this.posFile = Sheet.posFile;
+    this.baseLoc = Sheet.baseLocation;
+    this.baseName = Sheet.baseName;
+    this.opts = Sheet.opts;
+    this.useVariableSpaces = Sheet.useVariableSpaces;
+    this.genXML = Sheet.genXML;
+    this.saveByExport = Sheet.saveByExport;
+
     this.doc = null;
     this.sourceLS = sourceLS;
     this.name = sourceLS.name;
-    this.longName = this.baseName + "-" + this.name
+    this.longName = this.baseName + "-" + this.name;
 
-    this.esuffix = ".png";
-    if (this.opts.format == SaveDocumentType.JPEG)
-        this.esuffix = ".jpg";
-    else if (this.opts.format == SaveDocumentType.COMPUSERVEGIF)
-        this.esuffix = ".gif";
+    this.suffix = ".psd";
+    if (this.saveByExport)
+    {
+        this.suffix = ".png";
+        if (this.opts.format == SaveDocumentType.JPEG)
+            this.suffix = ".jpg";
+        else if (this.opts.format == SaveDocumentType.COMPUSERVEGIF)
+            this.suffix = ".gif";
+    }
 
-    this.useVariableSpaces = Window.confirm("Do you want to let layers have variable spacing for the " + this.name + " sheet?",
-            true, "Variable spacing?");
 
     // saves doc as PSD in file, and exports images of aprropriate type
-    this.saveAndExport = function()
+    this.saveOrExport = function()
     {
-        var exportFile = new File(this.baseLoc+ "/" + this.longName + this.esuffix);
-        this.doc.exportDocument(exportFile, ExportType.SAVEFORWEB, this.opts);
-
-        var destFile = new File(this.baseLoc+ "/" + this.longName + ".psd");
-        var saveOpt = new PhotoshopSaveOptions();
-        this.doc.saveAs(destFile, saveOpt, false, Extension.LOWERCASE);
+        var destFile = new File(this.baseLoc+ "/" + this.longName + this.suffix);
+        if (this.saveByExport)
+        {
+            this.doc.exportDocument(destFile, ExportType.SAVEFORWEB, this.opts);
+        }
+        else
+        {
+            var saveOpt = new PhotoshopSaveOptions();
+            this.doc.saveAs(destFile, saveOpt, false, Extension.LOWERCASE);
+        }
     }
 
     //This function generates a new document,
@@ -103,14 +113,16 @@ function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
         this.defWidth = sourceLS.bounds[2] - sourceLS.bounds[0]; 
         this.defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
 
-        this.posFile.writeln(indent + sheetString(this));
+        if (this.genXML)
+            this.posFile.writeln(indent + sheetString(this));
         var indent2 = indent+indent;
         //this loop moves each layer 
         for (var i=0; i < this.doc.artLayers.length; i++) 
         {
             xpos = this.moveLayer(this.doc.artLayers[i], xpos, indent2);
         }
-        this.posFile.writeln(indent + closeSheet());
+        if (this.genXML)
+            this.posFile.writeln(indent + closeSheet());
     }
 
     //places the next layer in the new PSD, writes the position and dimensions to the file
@@ -138,40 +150,89 @@ function Sheet(posFile, baseLocation, baseName, opts, sourceLS)
             height = this.defHeight;
         }
 
-        this.posFile.writeln(indent +
-                spriteString(x.value, y.value, width.value, height.value, layer.name));
+        if (this.genXML)
+            this.posFile.writeln(indent +
+                    spriteString(x.value, y.value, width.value, height.value, layer.name));
 
         //update the x position.
         return newX + width;
     }
 
+    //close the document.
+    this.close = function()
+    {
+        this.doc.close(SaveOptions.DONOTSAVECHANGES);
+    }
 }
 
 //Brings up a dialog asking about how export should be done.
-function getFormatOpts()
+function getFormatOpts(sourceDoc)
 {
     //The dialog is built using a resource string.
     var dia = new Window(
-            "dialog { \
-                info : Panel { orientation: 'column', alignChildren: 'right', \
-                    text: 'Options', \
-                    format : Group { orientation: 'row', \
+            "dialog \
+            { \
+                orientation: 'column', alignChildren: 'fill',\
+                info: Panel \
+                { orientation: 'column', alignChildren: 'fill', \
+                    text: 'Format Options', \
+                    format : Group \
+                    { \
+                        orientation: 'row', alignChildren:'fill', \
                         prompter : StaticText { text: 'What format to export in?'}, \
                         chooser : DropDownList { alignment: 'left' } \
                     },\
-                    pngOpts: Group { orientation: 'row', \
+                    pngOpts: Group \
+                    { \
+                        orientation: 'row', \
                         typeCheck: Checkbox { text: 'Use PNG24 instead of PNG8.' }\
                     },\
-                    jpgOpts: Group { orientation: 'row' \
+                    jpgOpts: Group \
+                    { \
+                        orientation: 'column', alignChildren: 'left',\
+                        msg: StaticText { text: 'How good should the quality be?' },\
+                        quality: Group \
+                        { \
+                            orientation: 'row', alignChildren: 'left', \
+                            slide: Slider { minValue: '0', maxValue: '100', value: '60'}\
+                            current: EditText { text: '60', characters: '3'}\
+                        },\
                     },\
-                    gifOpts: Group { orientation: 'row' \
+                    gifOpts: Group \
+                    { \
+                        orientation: 'row' \
+                    },\
+                    psdOpts: Group \
+                    {\
+                        orientation: 'row'\
                     }\
                 }, \
-                buttons: Group { orientation: 'row', \
-                    okBtn: Button { text:'OK', properties:{name:'ok'}},  \
-                    cancelBtn: Button { text:'Cancel', properties:{name:'cancel'}} \
-                } \
-             }" );
+                genOpts: Panel \
+                { \
+                    orientation: 'column', alignChildren: 'fill',\
+                    text: 'Generation options', \
+                    xmlCheck: Checkbox { text : 'Generate XML positions file', value: 'true' }, \
+                    variablePlacing: RadioButton { text: 'Place sprites using varying spacing', value: 'true'},\
+                    constantPlacing: RadioButton { text: 'Place sprites with constant sized areas'}\
+                },\
+                locPick: Panel \
+                { \
+                    orientation: 'row', alignChildren: 'center', \
+                    text: 'Location',\
+                    currentLoc: StaticText {characters: '40', properties:{truncate:'middle'}},\
+                    bringDialog: Button {text: 'Browse'}\
+                },\
+                buttonsCont: Group \
+                { \
+                    orientation: 'column', alignChildren: 'center',\
+                    buttons: Group \
+                    { \
+                        orientation: 'row', alignChildren:'center',\
+                        okBtn: Button { text:'OK', properties:{name:'ok'}},  \
+                        cancelBtn: Button { text:'Cancel', properties:{name:'cancel'}} \
+                    } \
+                }\
+             } " );
     // this allows only option groups for the chosen format to be shown
     dia.info.format.chooser.onChange = function ()
     {
@@ -182,6 +243,25 @@ function getFormatOpts()
             this.selection.group.visible = true;//show this group
         }
     }
+
+    //for the slider
+    dia.info.jpgOpts.quality.slide.onChanging = function()
+    {
+        dia.info.jpgOpts.quality.current.text = dia.info.jpgOpts.quality.slide.value;
+    }
+    dia.info.jpgOpts.quality.slide.onChange = dia.info.jpgOpts.quality.slide.onChanging;
+
+    dia.info.jpgOpts.quality.current.onChange = function()
+    {
+        var val = dia.info.jpgOpts.quality.current.text;
+        if (isNaN(val))
+        {
+            val = 60;
+            dia.info.jpgOpts.quality.current.text = val;
+        }
+        dia.info.jpgOpts.quality.slide.value = val;
+    }
+
     //formats that can be exported to, and their options
     var item = dia.info.format.chooser.add("item", "PNG");
     item.group = dia.info.pngOpts;
@@ -189,30 +269,55 @@ function getFormatOpts()
     item.group = dia.info.jpgOpts;
     item = dia.info.format.chooser.add("item", "GIF");
     item.group = dia.info.gifOpts;
+    item = dia.info.format.chooser.add("item", "PSD");
+    item.group = dia.info.psdOpts;
     dia.info.format.chooser.selection = dia.info.format.chooser.items[0];
+
+    //directory chooser.
+    var base = sourceDoc.path;
+    Sheet.baseLocation = base.fsName;
+    dia.locPick.currentLoc.text = Sheet.baseLocation;
+    dia.locPick.bringDialog.onClick = function ()
+    {
+        var baseTemp = base.selectDlg();
+        if (baseTemp == null)
+            return ;
+        base = baseTemp;
+        Sheet.baseLocation = base.fsName;
+        dia.locPick.currentLoc.text = Sheet.baseLocation.toString();
+        dia.locPick.layout.resize();
+    }
     dia.center();
     result = dia.show();
     if (result == 1)
     {
         //generate the options object using the results from the dialog.
         var exportOpts = new ExportOptionsSaveForWeb();
+        Sheet.saveByExport = true;
         switch (dia.info.format.chooser.selection.index)
         {
-            case 0:
+            case 0: //PNG
                 exportOpts.format = SaveDocumentType.PNG;
                 exportOpts.PNG8 = !dia.info.pngOpts.typeCheck.value;
                 break;
-            case 1:
+            case 1: //JPEG
                 exportOpts.format = SaveDocumentType.JPEG;
+                exportOpts.quality = dia.info.jpgOpts.quality.slide.value;
                 break;
-            case 2:
+            case 2: //GIF
                 exportOpts.format = SaveDocumentType.COMPUSERVEGIF;
                 break;
+            case 3: //PSD
+                Sheet.saveByExport = false;
+                break;
         }
-        return exportOpts;
+        Sheet.opts = exportOpts;
+        Sheet.genXML = dia.genOpts.xmlCheck.value;
+        Sheet.useVariableSpaces = dia.genOpts.variablePlacing.value;
+        return true;
     }
     else
-        return null;
+        return false;
 }
 
 
@@ -225,24 +330,25 @@ function main()
     var sourceDoc = activeDocument;
 
     //get options for exporting each generated sheet to PNG
-    opts = getFormatOpts();
-    if (opts == null)
+    gotOpts = getFormatOpts(sourceDoc);
+    if (!gotOpts)
         return ;
 
     //find out where to store everything.
-    var base= sourceDoc.path.selectDlg();
-    if (base == null)
-        return ;
-    var baseLocation = base.fsName;
-    var baseName = sourceDoc.name.substring(0, sourceDoc.name.lastIndexOf("."));
+    Sheet.baseName = sourceDoc.name.substring(0, sourceDoc.name.lastIndexOf("."));
 
     //text file stores positions of sprites in the sheets.
-    var posFile = new File(baseLocation + "/" + baseName + "-positions.xml", "TEXT");
-    posFile.open("w");
-    posFile.encoding = "UTF-8";
-    posFile.writeln("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>");
-
-    posFile.writeln("<positions " + prop("name", baseName) + " >");
+    if (Sheet.genXML)
+    {
+        Sheet.posFile = new File(Sheet.baseLocation + "/" + Sheet.baseName + "-positions.xml", "TEXT");
+        Sheet.posFileencoding = "UTF-8";
+        with (Sheet.posFile)
+        {
+            open("w");
+            writeln("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>");
+            writeln("<positions " + prop("name", Sheet.baseName) + " >");
+        }
+    }
 
     var sheet;
     var indent = "    ";
@@ -251,14 +357,20 @@ function main()
     var count = sourceDoc.layerSets.length;
  	for (var i=0; i < count; i++) 
     {
-        sheet = new Sheet(posFile, baseLocation, baseName, opts, sourceDoc.layerSets[i]);
+        sheet = new Sheet(sourceDoc.layerSets[i]);
         sheet.createDoc(sourceDoc);
         sheet.layout(indent);
-        sheet.saveAndExport();
+        sheet.saveOrExport();
+        sheet.close();
     }
-    
-    posFile.writeln("</positions>");
-    posFile.close();
+    if (Sheet.genXML)
+    {
+        with (Sheet.posFile)
+        {
+            writeln("</positions>");
+            close();
+        }
+    }
 
 }
 main()
