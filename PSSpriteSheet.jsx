@@ -239,6 +239,7 @@ function main()
     //text file stores positions of sprites in the sheets.
     var posFile = new File(baseLocation + "/" + baseName + "-positions.xml", "TEXT");
     posFile.open("w");
+    posFile.encoding = "UTF-8";
     posFile.writeln("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>");
 
     posFile.writeln("<positions " + prop("name", baseName) + " >");
