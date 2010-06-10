@@ -1,0 +1,63 @@
+This is a script for Adobe Photoshop meant for generating spritesheets. 
+It has only been tested on Photoshop CS3.
+
+It generates horizontally arranged spritesheets from the folders of the
+input document; each spritesheet is composed of the visible layers
+in the source folder.
+
+Installing: 
+Place the script in in Presets/Scripts in the directory that Photoshop 
+is installed in.
+
+The first thing the script does is present a dialog of options for the
+spritesheet generation.
+
+Format Options - 
+The generated files can be saved as PNGs, JPEGs, GIFs, or
+PSDs. The dialog has specific options for some of the formats.
+
+Generation Options - 
+See below for explanation of xml file option.
+
+Sprite placing can either be done according to the size of each sprite, or 
+according to a constant size.
+Placing according to the size of each sprite (the first option) means that the
+sprites will be aligned to the top left of the space available to them; the 
+space filled by each sprite will vary.
+Placing according to a constant size arranges the sprites so that each one is 
+centered in equally sized boxes; these boxes are the smallest boxes capable of
+fitting every sprite in the sheet.
+
+Location -
+This is the directory that the generated files will be stored in. 
+The script generates one file for each folder, naming the files as 
+<name of source document>-<name of folder>.<format>
+
+XML File:
+One of functions of the script is to generate an XML file describing the positions of the sprites.
+
+The top level node of this file is <positions>, with a property 
+name - the base name of the source document. 
+
+The positions node contains <sheet> nodes, which have the properties
+name - the name of the folder that the sheet was generated from
+src - the filename of the sheet
+w - the width of the spritesheet, in pixels
+h - the height of the sheet
+
+A sheet node contains <sprite> nodes, one for each layer in the source folder.
+A sprite node has the properties
+name - the name of the layer that contains the sprite in the source document
+x, y - the coordinates of the upper left corner of the sprite. y should be 0.
+w, h - the width and height of the sprite.
+
+The XML file is primarily useful when generating spritesheets by placing with
+variable sizes; constant sized sprites can be found by dividing the width of the
+sheet by the number of sprites, then looping through by that sized step along 
+the width of the sheet.
+
+
+Written by Aidan Coyne, working at Roundarch in summer of 2010.
+Idea came from Jesse Freeman.
+
+http://github.com/raptros/PSSpriteSheet

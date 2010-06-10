@@ -1,3 +1,8 @@
+/*
+ * Written by Aidan Coyne, in 2010, at Roundarch, under the direction of Jesse Freeman.
+ * See README for info, and LICENSE for MIT License.
+ */
+
 function prop(name, value) { return name + "=\"" + value + "\""; }
 
 //generate a sprite node.
@@ -341,7 +346,7 @@ function main()
     if (Sheet.genXML)
     {
         Sheet.posFile = new File(Sheet.baseLocation + "/" + Sheet.baseName + "-positions.xml", "TEXT");
-        Sheet.posFileencoding = "UTF-8";
+        Sheet.posFile.encoding = "UTF-8";
         with (Sheet.posFile)
         {
             open("w");
@@ -357,11 +362,13 @@ function main()
     var count = sourceDoc.layerSets.length;
  	for (var i=0; i < count; i++) 
     {
-        sheet = new Sheet(sourceDoc.layerSets[i]);
-        sheet.createDoc(sourceDoc);
-        sheet.layout(indent);
-        sheet.saveOrExport();
-        sheet.close();
+        with (new Sheet(sourceDoc.layerSets[i]))
+        {
+            createDoc(sourceDoc);
+            layout(indent);
+            saveOrExport();
+            close();
+        }
     }
     if (Sheet.genXML)
     {
