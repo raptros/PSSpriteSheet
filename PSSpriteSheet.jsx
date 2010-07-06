@@ -339,6 +339,16 @@ function main()
     if (!gotOpts)
         return ;
 
+    var count = sourceDoc.layerSets.length;
+    
+    //check that the document has folders.
+    if (count == 0)
+    {
+        Window.alert("This script works on layers that are in folders, but this document does not have any folders. Please add at least one folder of layers before running this script.",
+                "No folders found");
+        return ;
+    }
+
     //find out where to store everything.
     Sheet.baseName = sourceDoc.name.substring(0, sourceDoc.name.lastIndexOf("."));
 
@@ -359,8 +369,7 @@ function main()
     var indent = "    ";
 
     //loop over each folder, generating sheets.
-    var count = sourceDoc.layerSets.length;
- 	for (var i=0; i < count; i++) 
+    for (var i=0; i < count; i++) 
     {
         with (new Sheet(sourceDoc.layerSets[i]))
         {
