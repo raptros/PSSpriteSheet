@@ -371,6 +371,8 @@ function main()
     //loop over each folder, generating sheets.
     for (var i=0; i < count; i++) 
     {
+        if (!sourceDoc.layerSets[i].visible)
+            continue;
         with (new Sheet(sourceDoc.layerSets[i]))
         {
             createDoc(sourceDoc);
