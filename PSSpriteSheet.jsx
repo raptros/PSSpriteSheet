@@ -37,6 +37,9 @@ function Sheet(sourceLS)
     this.baseLoc = Sheet.baseLocation;
     this.baseName = Sheet.baseName;
     this.opts = Sheet.opts;
+    this.scale = Sheet.scale;
+    this.doScale = Sheet.doScale;
+    this.scaleAmount = Sheet.scaleAmount;
     this.useVariableSpaces = Sheet.useVariableSpaces;
     this.genXML = Sheet.genXML;
     this.saveByExport = Sheet.saveByExport;
@@ -45,6 +48,9 @@ function Sheet(sourceLS)
     this.sourceLS = sourceLS;
     this.name = sourceLS.name;
     this.longName = this.baseName + "-" + this.name;
+
+    if (this.doScale)
+        this.longName = this.longName + "-scale-" + this.scaleAmount;
 
     this.suffix = ".psd";
     if (this.saveByExport)
@@ -108,6 +114,17 @@ function Sheet(sourceLS)
         this.doc.resizeCanvas(newWidth, this.doc.height, AnchorPosition.TOPLEFT);
     }
 
+    //does the scaling work.
+    this.afterLayout = function()
+    {
+        if (this.doScale)
+        {
+            var newWidth = this.doc.width * this.scale;
+            var newHeight = this.doc.height * this.scale;
+            this.doc.resizeImage(newWidth, newHeight, this.doc.resolution, ResampleMethod.NEARESTNEIGHBOR);
+        }
+    }
+
     //lays out the layers of the spritesheet, logs information
     this.layout = function(indent)
     {
@@ -115,7 +132,7 @@ function Sheet(sourceLS)
         var sourceLS = this.sourceLS;
 
         //used for non-variable spacing mode:
-        this.defWidth = sourceLS.bounds[2] - sourceLS.bounds[0]; 
+        this.defWidth = sourceLS.bounds[2] - sourceLS.bounds[0];
         this.defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
 
         if (this.genXML)
@@ -129,6 +146,7 @@ function Sheet(sourceLS)
         if (this.genXML)
             this.posFile.writeln(indent + closeSheet());
     }
+
 
     //places the next layer in the new PSD, writes the position and dimensions to the file
     this.moveLayer = function(layer, newX, indent)
@@ -156,8 +174,14 @@ function Sheet(sourceLS)
         }
 
         if (this.genXML)
+        {
+            var xval = (x * this.scale).value;
+            var yval = (y * this.scale).value;
+            var wval = (width * this.scale).value;
+            var hval = (height * this.scale).value;
             this.posFile.writeln(indent +
-                    spriteString(x.value, y.value, width.value, height.value, layer.name));
+                    spriteString(xval, yval, wval, hval, layer.name));
+        }
 
         //update the x position.
         return newX + width;
@@ -199,7 +223,7 @@ function getFormatOpts(sourceDoc)
                         quality: Group \
                         { \
                             orientation: 'row', alignChildren: 'left', \
-                            slide: Slider { minValue: '0', maxValue: '100', value: '60'}\
+                            slide: Slider { minValue: '0', maxValue: '100', value: '60'},\
                             current: EditText { text: '60', characters: '3'}\
                         },\
                     },\
@@ -219,6 +243,13 @@ function getFormatOpts(sourceDoc)
                     xmlCheck: Checkbox { text : 'Generate XML positions file', value: 'true' }, \
                     variablePlacing: RadioButton { text: 'Place sprites using varying spacing', value: 'true'},\
                     constantPlacing: RadioButton { text: 'Place sprites with constant sized areas'}\
+                },\
+                scaleOpts: Panel \
+                { \
+                    orientation: 'row', alignChildren: 'fill', \
+                    text: 'Scale Image?',\
+                    scale: Slider {minValue: '0', maxValue: '100', value: '100'}, \
+                    scCurrent: EditText {text: '100', characters: '3'} \
                 },\
                 locPick: Panel \
                 { \
@@ -265,6 +296,25 @@ function getFormatOpts(sourceDoc)
             dia.info.jpgOpts.quality.current.text = val;
         }
         dia.info.jpgOpts.quality.slide.value = val;
+    }
+
+    //for the scale slider
+    dia.scaleOpts.scale.onChanging = function()
+    {
+        dia.scaleOpts.scCurrent.text = dia.scaleOpts.scale.value;
+    }
+
+    dia.scaleOpts.scale.onChange = dia.scaleOpts.scale.onChanging;
+
+    dia.scaleOpts.scCurrent.onChange = function()
+    {
+        var val = dia.scaleOpts.scCurrent.text;
+        if (isNaN(val))
+        {
+            val = 100;
+            dia.scaleOpts.scCurrent.text = val;
+        }
+        dia.scaleOpts.scale.value = val;
     }
 
     //formats that can be exported to, and their options
@@ -317,6 +367,12 @@ function getFormatOpts(sourceDoc)
                 break;
         }
         Sheet.opts = exportOpts;
+        Sheet.scale = dia.scaleOpts.scale.value / 100.0;
+        Sheet.scaleAmount = dia.scaleOpts.scale.value;
+        if (dia.scaleOpts.scale.value < 100)
+        {
+            Sheet.doScale = true;
+        }
         Sheet.genXML = dia.genOpts.xmlCheck.value;
         Sheet.useVariableSpaces = dia.genOpts.variablePlacing.value;
         return true;
@@ -355,7 +411,10 @@ function main()
     //text file stores positions of sprites in the sheets.
     if (Sheet.genXML)
     {
-        Sheet.posFile = new File(Sheet.baseLocation + "/" + Sheet.baseName + "-positions.xml", "TEXT");
+        var suffix = "-positions.xml";
+        if (Sheet.doScale)
+            suffix = "-positions-scale-" +Sheet.scaleAmount + ".xml";
+        Sheet.posFile = new File(Sheet.baseLocation + "/" + Sheet.baseName + suffix, "TEXT");
         Sheet.posFile.encoding = "UTF-8";
         with (Sheet.posFile)
         {
@@ -377,6 +436,7 @@ function main()
         {
             createDoc(sourceDoc);
             layout(indent);
+            afterLayout();
             saveOrExport();
             close();
         }
