@@ -106,23 +106,29 @@ function Sheet(sourceLS)
                 //we want to keep the original layer names. Yes, this does exactly that.
                 this.doc.paste().name = layer.name;
                 if (this.useVariableSpaces)
-                    newWidth += (layer.bounds[2] - layer.bounds[0]);
+                    newWidth += (layer.bounds[2] - layer.bounds[0]) * this.scale;
             }
         }
+        
+        this.preLayout();
+
         if (!this.useVariableSpaces)
-            newWidth = sourceLS.artLayers.length * width;
+            newWidth = sourceLS.artLayers.length * this.defWidth;
         this.doc.resizeCanvas(newWidth, this.doc.height, AnchorPosition.TOPLEFT);
     }
 
     //does the scaling work.
-    this.afterLayout = function()
+    this.preLayout = function()
     {
         if (this.doScale)
         {
             var newWidth = this.doc.width * this.scale;
             var newHeight = this.doc.height * this.scale;
             this.doc.resizeImage(newWidth, newHeight, this.doc.resolution, ResampleMethod.NEARESTNEIGHBOR);
+            this.doc.resizeCanvas(this.doc.width, this.doc.height, AnchorPosition.TOPLEFT);
         }
+        this.defWidth = this.doc.width; //(sourceLS.bounds[2] - sourceLS.bounds[0]) * this.scale;
+        this.defHeight = this.doc.height; //(sourceLS.bounds[3] - sourceLS.bounds[1]) * this.scale;
     }
 
     //lays out the layers of the spritesheet, logs information
@@ -132,8 +138,6 @@ function Sheet(sourceLS)
         var sourceLS = this.sourceLS;
 
         //used for non-variable spacing mode:
-        this.defWidth = sourceLS.bounds[2] - sourceLS.bounds[0];
-        this.defHeight = sourceLS.bounds[3] - sourceLS.bounds[1];
 
         if (this.genXML)
             this.posFile.writeln(indent + sheetString(this));
@@ -175,10 +179,10 @@ function Sheet(sourceLS)
 
         if (this.genXML)
         {
-            var xval = (x * this.scale).value;
-            var yval = (y * this.scale).value;
-            var wval = (width * this.scale).value;
-            var hval = (height * this.scale).value;
+            var xval = x.value;
+            var yval = y.value;
+            var wval = width.value;
+            var hval = height.value;
             this.posFile.writeln(indent +
                     spriteString(xval, yval, wval, hval, layer.name));
         }
@@ -427,6 +431,7 @@ function main()
     var sheet;
     var indent = "    ";
 
+    displayDialogs = DialogModes.ERROR;
     //loop over each folder, generating sheets.
     for (var i=0; i < count; i++) 
     {
@@ -435,8 +440,8 @@ function main()
         with (new Sheet(sourceDoc.layerSets[i]))
         {
             createDoc(sourceDoc);
+            //preLayout();
             layout(indent);
-            afterLayout();
             saveOrExport();
             close();
         }
@@ -449,6 +454,7 @@ function main()
             close();
         }
     }
+    displayDialogs = DialogModes.ALL;
 
 }
 main()
